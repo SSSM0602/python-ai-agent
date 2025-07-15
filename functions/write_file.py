@@ -1,8 +1,8 @@
 import os
 import sys
-from . import config
 from google.genai import types
-def get_file_content(working_directory, file_path):
+
+def write_file(working_directory, file_path, content):
     working_directory = os.path.abspath(working_directory)
     curr_path = os.path.join(working_directory, file_path)
 
@@ -12,24 +12,25 @@ def get_file_content(working_directory, file_path):
 
     if not os.path.isfile(curr_path):
         print(f'Error: File not found or is not a regular file: "{file_path}"')
-        
-    with open(curr_path, "r") as file:
-        file_content = file.read(config.FILE_CHAR_LIMIT)
 
-    print(file_content)
-    if (os.path.getsize(curr_path) > config.FILE_CHAR_LIMIT):
-        print(f'[...File "{file_path}" truncated at 10000 characters]')
+    with open(curr_path, "w") as file:
+        file.write(content)
 
+    print(f'Successfully wrote to "{file_path}" ({len(content)} characters written)')
 
-schema_get_file_content = types.FunctionDeclaration(
-    name="get_file_content",
+schema_write_file = types.FunctionDeclaration(
+    name="write_file",
     description="Lists files in the specified directory along with their sizes, constrained to the working directory.",
     parameters=types.Schema(
         type=types.Type.OBJECT,
         properties={
             "file_path": types.Schema(
                 type=types.Type.STRING,
-                description="The file to retrieve content from, relative to the working directory. If not provided, lists files in the working directory itself.",
+                description="The file to write to, relative to the working directory. If not provided, lists files in the working directory itself.",
+            ),
+            "content": types.Schema(
+                type=types.Type.STRING,
+                description="The content to write to the file, relative to the working directory. If not provided, lists files in the working directory itself.",
             ),
         },
     ),
