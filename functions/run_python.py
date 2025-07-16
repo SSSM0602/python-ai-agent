@@ -49,7 +49,7 @@ schema_run_python = types.FunctionDeclaration(
         properties={
             "file_path": types.Schema(
                 type=types.Type.STRING,
-                description="The python file to run, relative to the working directory. If not provided, lists files in the working directory itself.",
+                description="The python file to run, which must be present in the current working directory.",
             ),
         },
     ),
