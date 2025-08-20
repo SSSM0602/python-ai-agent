@@ -8,7 +8,7 @@ def write_file(working_directory, file_path, content):
 
     if not os.path.commonpath([working_directory])== os.path.commonpath([working_directory, curr_path]):
         print(f'Error: Cannot read "{file_path}" as it is outside the permitted working directory')
-        sys.exit(0)
+        return
 
     if not os.path.isfile(curr_path):
         print(f'Error: File not found or is not a regular file: "{file_path}"')
@@ -32,6 +32,12 @@ schema_write_file = types.FunctionDeclaration(
                 type=types.Type.STRING,
                 description="The content to write to the file.",
             ),
+
+            "working_directory": types.Schema(
+                type=types.Type.STRING,
+                description="The working directory that contains the relevant file.",
+            ),
         },
+        required=["file_path", "content", "working_directory"]
     ),
 )

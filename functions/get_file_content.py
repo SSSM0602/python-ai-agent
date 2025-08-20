@@ -20,6 +20,8 @@ def get_file_content(working_directory, file_path):
     if (os.path.getsize(curr_path) > config.FILE_CHAR_LIMIT):
         print(f'[...File "{file_path}" truncated at 10000 characters]')
 
+    return file_content
+
 
 schema_get_file_content = types.FunctionDeclaration(
     name="get_file_content",
@@ -31,6 +33,12 @@ schema_get_file_content = types.FunctionDeclaration(
                 type=types.Type.STRING,
                 description="The file to retrieve content from, which must be present in the current working directory.",
             ),
+
+            "working_directory": types.Schema(
+                type=types.Type.STRING,
+                description="The current working directory that contains the relevant file.",
+            ),
         },
+        required=["working_directory", "file_path"]
     ),
 )

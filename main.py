@@ -18,16 +18,21 @@ api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
 system_prompt = """
-You are a helpful AI coding agent.
+You are an AI coding agent that analyzes code and provides direct answers.
 
-When a user asks a question or makes a request, make a function call plan. You can perform the following operations:
-
+Available functions:
 - List files and directories
-- Read file contents
+- Read file contents  
 - Execute Python files with optional arguments
 - Write or overwrite files
 
-All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
+Use these functions to gather information needed to answer questions. Provide factual, technical answers without conversational language like "I've examined" or "Let me check". State findings directly.
+
+Example good response: "The calculator renders results using the render() function in pkg/render.py, which creates a formatted box around the expression and result using ASCII characters."
+
+Example bad response: "Okay, I've examined the code and here's how it works: [explanation]"
+Provide your analysis or explanation once when the task is complete. Do not acknowledge with "OK", ask follow-up questions, or continue the conversation unless additional clarification is needed to complete the original request.
+Once you have completed the user's request and provided the necessary information or explanation, stop. Do not engage in conversational pleasantries or ask follow-up questions unless the task requires clarification to proceed.
 """
 
 available_functions = types.Tool(
@@ -51,7 +56,7 @@ def call_function(function_call_part, verbose=False):
         curr_func = func_defs[function_call_part.name]
     except:
         return types.Content(
-            role="tool",
+            role="user",
             parts=[
                 types.Part.from_function_response(
                     name=function_call_part.name,
@@ -59,47 +64,80 @@ def call_function(function_call_part, verbose=False):
                 )
             ],
         )
-    
-    func_args = function_call_part.args
+
+    func_args = function_call_part.args or {}  # Handle None case
+    func_args = dict(func_args)  # Ensure it's a dict we can modify
     func_args['working_directory'] = working_directory
-    print(func_args)
     result = curr_func(**func_args)
+
+    if isinstance(result, str):
+        result = {"result": result}
+    elif not isinstance(result, dict):
+        result = {"result": str(result)}
+
     return types.Content(
-        role="tool",
+        role="user",
         parts=[
             types.Part.from_function_response(
                 name=function_call_part.name,
-                response={"result": result},
+                response=result,
             )
         ],
     )
-    
+
 def main():
+    max_iters = 20
+    curr_iter = 0
     if len(sys.argv) < 2:
         print("Need a cmd line argument to use the model!")
         sys.exit(1)
 
     user_prompt = sys.argv[1]
-    messages = types.Content(role="user", parts=[types.Part(text=user_prompt)])
-    response = client.models.generate_content(model="gemini-2.0-flash-001", contents=messages, 
-        config=types.GenerateContentConfig(
-        tools=[available_functions], system_instruction=system_prompt
-        ),
-    )
-    if len(response.function_calls):
+    verbose = len(sys.argv) > 2 and sys.argv[2] == "--verbose" 
+    messages = [types.Content(role="user", parts=[types.Part(text=user_prompt)])]
+
+    while curr_iter < max_iters:
         try:
-            func_call_result = call_function(function_call_part=response.function_calls[0], verbose=(sys.argv[2] == "--verbose"))
-            print(f"{func_call_result.parts[0].function_response.response}")
+            response = client.models.generate_content(model="gemini-2.0-flash-001", contents=messages, 
+                                                      config=types.GenerateContentConfig(
+                                                      tools=[available_functions], system_instruction=system_prompt
+                                                      ),
+                                                      )
+
+            has_func_call = False
+            for item in response.candidates:
+                output_content = item.content
+                messages.append(output_content)
+
+                for part in output_content.parts:
+                    if part.function_call:
+                        has_func_call = True
+                        try:
+                            func_call_result = call_function(function_call_part=part.function_call, verbose=(verbose))
+                            messages.append(func_call_result)
+                        except Exception as e:
+                            print(f"Error running function: {e}")
+                            error_content = types.Content(
+                                role="user",
+                                parts=[types.Part(text=f"Function call error: {e}")]
+                            )
+                            messages.append(error_content)
+                    elif part.text:
+                        print(part.text)
+
+            if not has_func_call:
+                if verbose:
+                    print("User prompt:", user_prompt)
+                    print("Prompt tokens:", response.usage_metadata.prompt_token_count) 
+                    print("Response tokens:", response.usage_metadata.candidates_token_count) 
+                break
+            curr_iter += 1
         except Exception as e:
-            print(f"Error: {e}")
-        #print(f"Calling function: {response.function_calls[0].name}({response.function_calls[0].args})")
-    else:
-        print(response.text)
-    if (len(sys.argv) > 2):
-        if (sys.argv[2] == "--verbose"):
-            print("User prompt:", user_prompt)
-            print("Prompt tokens:", response.usage_metadata.prompt_token_count) 
-            print("Response tokens:", response.usage_metadata.candidates_token_count) 
+            print(f"Error in generate_content: {e}")
+            break
+
+    if curr_iter >= max_iters:
+        print("Maximum iterations reached. Stopping.")
 
 if __name__ == "__main__":
     main()
