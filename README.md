@@ -20,7 +20,7 @@ A Python-based AI coding agent that uses Google's Gemini 2.0 Flash model to anal
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/SSSM0602/python-ai-agent.git
 cd aiagent
 ```
 
